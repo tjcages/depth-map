@@ -162,7 +162,7 @@ const fragmentShader = `
 
     vec4 frect = ((rectH4 + rectV4) * randDistribution) * 0.75;
 
-    vec4 UItexture = texture2D(UIText, uv) * 0.2;
+    vec4 UItexture = texture2D(UIText, uv) * 0.;
     
     gl_FragColor = (UItexture.a * vec4(1.0) + RGB4 + grain + frect) * streamLines * streamLinesThick;
   }
@@ -414,15 +414,19 @@ const UIOverlay = () => {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // Set text properties
-      ctx.font = "bold 72px Arial";
+      ctx.font = "bold 40px Arial";
       ctx.fillStyle = "white";
       ctx.textBaseline = "top";
 
       // Draw left text (repeated)
       ctx.textAlign = "left";
       const phrase = "AN EXPERIMENTAL PRACTICE ";
-      const repeatedPhrase = phrase.repeat(3);
-      ctx.fillText(repeatedPhrase, 25, canvas.height / 2);
+      const repeatedPhrase = phrase.repeat(1);
+      ctx.fillText(repeatedPhrase, 50, canvas.height / 2);
+
+      const phrase2 = "VOLUME 1";
+      const repeatedPhrase2 = phrase2.repeat(1);
+      ctx.fillText(repeatedPhrase2, canvas.width / 2 + 500, canvas.height / 2);
 
       const texture = new THREE.CanvasTexture(canvas);
       texture.needsUpdate = true;
@@ -456,9 +460,19 @@ const UIOverlay = () => {
     varying vec2 vUv;
     uniform float time;
     uniform sampler2D textTexture;
+
+    vec2 lensDistort(vec2 uv, float power, float radInc) {
+      float theta  = atan(uv.y, uv.x);
+      float radius = length(uv);
+      radius = pow(radius, power) * radInc;
+      uv.x = radius * cos(theta);
+      uv.y = radius * sin(theta);
+      return 0.5 * (uv + 1.0);
+    }
     
     void main() {
       vec2 uv = vUv;
+      uv = lensDistort(uv.xy * 2.0 - 1.0, 1.0, 1.1);
       
       // Scroll UV for left text
       vec2 leftUV = uv;
@@ -468,13 +482,13 @@ const UIOverlay = () => {
       vec4 textColor = texture2D(textTexture, vec2(leftUV.x, uv.y));
       
       // Add scan lines
-      float scanline = step(0.95, fract(uv.y * 50.0 + time));
+      float scanline = step(0.4, fract(uv.y * 100.0 + time));
       
       // Fade based on time
-      float fade = sin(time * 0.5) * 0.5 + 0.5;
+      // float fade = sin(time * 0.5) * 0.5 + 0.5;
       
       // Final color
-      gl_FragColor = vec4(vec3(1.0), textColor.r * fade * scanline * 0.35);
+      gl_FragColor = vec4(vec3(1.0), textColor.r * 1.0 * scanline * 0.75);
     }
   `;
 
@@ -509,7 +523,7 @@ export const Canvas = () => {
           style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
         >
           <ShaderEffect />
-          {/* <UIOverlay /> */}
+          <UIOverlay />
         </DefaultCanvas>
       </div>
     </div>
