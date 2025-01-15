@@ -209,150 +209,88 @@ const ShaderEffect: React.FC<ShaderEffectProps> = ({ margin = 50 }) => {
     scale: { value: 1.25 }
   });
 
+  // Create text texture
+  useEffect(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 1024;
+    const ctx = canvas.getContext("2d");
+
+    if (ctx) {
+      // Set background
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Set text properties - reduced size to 30%
+      ctx.fillStyle = "white";
+      ctx.font = "bold 150px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      // First, draw text to get its metrics
+      const text = "2025";
+      const metrics = ctx.measureText(text);
+      const textX = canvas.width / 2;
+      const textY = canvas.height / 2;
+
+      // Create a gradient for depth effect
+      const gradient = ctx.createLinearGradient(
+        textX - metrics.width / 2,
+        textY - metrics.actualBoundingBoxAscent,
+        textX + metrics.width / 2,
+        textY + metrics.actualBoundingBoxDescent
+      );
+      gradient.addColorStop(0, "white");
+      gradient.addColorStop(0.5, "gray");
+      gradient.addColorStop(1, "black");
+
+      // Save context state
+      ctx.save();
+
+      // Draw text with gradient
+      ctx.fillStyle = gradient;
+      ctx.fillText(text, textX, textY);
+
+      // Create a subtle glow effect
+      ctx.shadowColor = "white";
+      ctx.shadowBlur = 15;
+      ctx.fillText(text, textX, textY);
+
+      // Restore context state
+      ctx.restore();
+
+      // Create texture
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.format = THREE.RGBAFormat;
+      texture.needsUpdate = true;
+
+      // Add metadata
+      const textureWithMetadata = texture as TextureData;
+      textureWithMetadata.userData = {
+        name: "text2025",
+        description: "Text texture displaying 2025 with depth"
+      };
+
+      setTextures([textureWithMetadata]);
+    }
+  }, []);
+
   // Animation loop
   useFrame(() => {
     if (materialRef.current && textures.length > 0) {
       const elapsedSeconds = (Date.now() - startTime.current) / 2500.0;
       const maxTime = 6.0;
       const normTime = (elapsedSeconds % maxTime) / maxTime;
-      const index = Math.floor((elapsedSeconds * 0.25) % textures.length);
-
-      // Debug current texture index with name
-      if (index !== lastIndex.current) {
-        const currentTexture = textures[index];
-        console.log(`Switching to texture: ${currentTexture.userData.name}`);
-        lastIndex.current = index;
-      }
 
       uniformsRef.current.time.value = elapsedSeconds * 0.5;
       uniformsRef.current.target.value = 1.0 - normTime;
-      uniformsRef.current.mainTexture.value = textures[index];
+      uniformsRef.current.mainTexture.value = textures[0];
 
       materialRef.current.needsUpdate = true;
     }
   });
-
-  // Fetch texture data
-  useEffect(() => {
-    const fetchTextures = async () => {
-      try {
-        const response = await fetch(
-          "https://www.arivaux.com/prototype/codevember2017/DepthUI/texData.js"
-        );
-        const text = await response.text();
-
-        // Parse the JS file content to extract texture data
-        const textureMatches = text.match(/var tex\d+ = "(data:image\/jpeg;base64,[^"]+)"/g);
-
-        // Look for UI texture
-        const uiMatch = text.match(/var UI = "(data:image\/[^"]+;base64,[^"]+)"/);
-
-        if (textureMatches) {
-          // Extract and create textures with metadata
-          const textureData = textureMatches
-            .map(match => {
-              const nameMatch = match.match(/var (tex\d+)/);
-              const base64Match = match.match(/"(data:image\/jpeg;base64,[^"]+)"/);
-              if (base64Match && base64Match[1] && nameMatch) {
-                const textureName = nameMatch[1];
-                // Add descriptions for each texture
-                let description = "";
-                switch (textureName) {
-                  case "tex0":
-                    description = "Face depth map - primary texture for face visualization";
-                    break;
-                  case "tex1":
-                    description = "Secondary depth map for transition effects";
-                    break;
-                  case "tex2":
-                    description = "Additional depth map for layering";
-                    break;
-                  case "tex3":
-                    description = "Supplementary depth map for animation";
-                    break;
-                  case "tex4":
-                    description = "Final depth map in the sequence";
-                    break;
-                  default:
-                    description = "Unknown texture type";
-                }
-                return createTextureWithMetadata(base64Match[1], textureName, description);
-              }
-              return null;
-            })
-            .filter((texture): texture is TextureData => texture !== null);
-
-          // Sort textures by their original order
-          const sortedTextures = textureData.sort((a, b) => {
-            const aNum = parseInt(a.userData.name.replace("tex", ""));
-            const bNum = parseInt(b.userData.name.replace("tex", ""));
-            return aNum - bNum;
-          });
-
-          setTextures(sortedTextures);
-        }
-
-        // Create UI texture if found
-        if (uiMatch && uiMatch[1]) {
-          const uiTexture = createTextureWithMetadata(
-            uiMatch[1],
-            "UI",
-            "Interface overlay texture with transparency"
-          );
-          uiTexture.format = THREE.RGBAFormat;
-          uiTexture.needsUpdate = true;
-          uniformsRef.current.UIText.value = uiTexture;
-        } else {
-          // Fallback to our canvas-generated UI texture
-          const canvas = document.createElement("canvas");
-          canvas.width = window.innerWidth;
-          canvas.height = window.innerHeight;
-          const ctx = canvas.getContext("2d");
-          if (ctx) {
-            // Create a grid pattern
-            ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
-            const gridSize = 40;
-            for (let x = 0; x < canvas.width; x += gridSize) {
-              for (let y = 0; y < canvas.height; y += gridSize) {
-                if ((x / gridSize + y / gridSize) % 2 === 0) {
-                  ctx.fillRect(x, y, gridSize, gridSize);
-                }
-              }
-            }
-
-            // Add some lines
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-            ctx.lineWidth = 2;
-            for (let y = 0; y < canvas.height; y += canvas.height / 10) {
-              ctx.beginPath();
-              ctx.moveTo(0, y);
-              ctx.lineTo(canvas.width, y);
-              ctx.stroke();
-            }
-          }
-
-          const texture = new THREE.CanvasTexture(canvas);
-          texture.format = THREE.RGBAFormat;
-          texture.needsUpdate = true;
-          uniformsRef.current.UIText.value = texture;
-        }
-      } catch (error) {
-        console.error("Failed to fetch textures:", error);
-      }
-    };
-
-    fetchTextures();
-  }, []);
-
-  // Update uniforms when textures change
-  useEffect(() => {
-    if (textures.length > 0) {
-      uniformsRef.current.mainTexture.value = textures[0];
-      if (materialRef.current) {
-        materialRef.current.needsUpdate = true;
-      }
-    }
-  }, [textures]);
 
   // Handle resize
   useEffect(() => {
@@ -523,7 +461,7 @@ export const Canvas = () => {
           style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
         >
           <ShaderEffect />
-          <UIOverlay />
+          {/* <UIOverlay /> */}
         </DefaultCanvas>
       </div>
     </div>
